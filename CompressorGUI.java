@@ -3,111 +3,113 @@ import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
+public class CompressorGUI extends JFrame 
+{
 
-public class CompressorGUI extends JFrame {
-
-    private JButton compressButton;
-    private JButton decompressButton;
-    private JButton selectFileButton;
+    private JButton selectFileButton, compressButton, decompressButton;
     private JTextArea resultTextArea;
     private JLabel statusLabel;
-    private JFileChooser fileChooser;
     private File selectedFile;
 
     public CompressorGUI() {
-        // Set up the window
-        setTitle("File Compressor/Decompressor");
-        setSize(600, 400);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setTitle("Huffman File Compressor / Decompressor");
+        setSize(700, 500);
+        setLayout(new FlowLayout());
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
-        // Set up components
+        selectFileButton = new JButton("Select File");
         compressButton = new JButton("Compress");
         decompressButton = new JButton("Decompress");
-        selectFileButton = new JButton("Select File");
-        resultTextArea = new JTextArea(10, 40);
-        statusLabel = new JLabel("Select a file and choose an action.");
-        fileChooser = new JFileChooser();
 
-        // Allow all types of files for compression and decompression
-        fileChooser.setAcceptAllFileFilterUsed(false);
-        fileChooser.setFileFilter(new FileNameExtensionFilter("Text and Image Files", "txt", "jpg", "jpeg", "png"));
+        resultTextArea = new JTextArea(15, 55);
+        resultTextArea.setLineWrap(true);
+        resultTextArea.setWrapStyleWord(true);
+        JScrollPane scrollPane = new JScrollPane(resultTextArea);
 
-        // Layout the components
-        setLayout(new FlowLayout());
+        statusLabel = new JLabel("No file selected");
+
         add(selectFileButton);
         add(compressButton);
         add(decompressButton);
-        add(new JScrollPane(resultTextArea));
+        add(scrollPane);
         add(statusLabel);
 
-        // Action listener for the select file button
-        selectFileButton.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                selectFile();
-            }
-        });
-
-        // Action listener for the compress button
-        compressButton.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                if (selectedFile != null) {
-                    processFile(true); // true for compression
-                }
-            }
-        });
-
-        // Action listener for the decompress button
-        decompressButton.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                if (selectedFile != null) {
-                    processFile(false); // false for decompression
-                }
-            }
-        });
+        selectFileButton.addActionListener(e -> chooseFile());
+        compressButton.addActionListener(e -> compressFile());
+        decompressButton.addActionListener(e -> decompressFile());
     }
 
-    // Select a file using the file chooser
-    private void selectFile() {
-        int returnValue = fileChooser.showOpenDialog(this);
-        if (returnValue == JFileChooser.APPROVE_OPTION) {
+    private void chooseFile() 
+    {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setFileFilter(new FileNameExtensionFilter("Text and Image Files", "txt", "jpg", "jpeg", "png", "huff"));
+        int option = fileChooser.showOpenDialog(this);
+        if (option == JFileChooser.APPROVE_OPTION) {
             selectedFile = fileChooser.getSelectedFile();
-            statusLabel.setText("Selected file: " + selectedFile.getName());
+            statusLabel.setText("Selected: " + selectedFile.getName());
         }
     }
 
-    // Process file for compression or decompression
-    private void processFile(boolean isCompress) {
+    private void compressFile() 
+    {
+    if (selectedFile == null) 
+    {
+        statusLabel.setText("Please select a file first.");
+        return;
+    }
+    try {
+        byte[] input = FileHandler.readFile(selectedFile);
+        int originalSize = input.length;
+
+        byte[] compressed = HuffmanAlgorithm.compress(input);
+        int compressedSize = compressed.length;
+
+        File outFile = new File(selectedFile.getParent(), selectedFile.getName() + ".huff");
+        FileHandler.writeFile(outFile, compressed);
+
+        StringBuilder binaryBuilder = new StringBuilder();
+        for (byte b : compressed) {
+            // Convert byte to 8-bit binary string
+            String binaryString = String.format("%8s", Integer.toBinaryString(b & 0xFF)).replace(' ', '0');
+            binaryBuilder.append(binaryString).append(' ');
+        }
+
+        double ratio = (double) compressedSize / originalSize * 100;
+
+        resultTextArea.setText(
+            "Compression Summary:\n" +
+            "------------------------------\n" +
+            " File: " + selectedFile.getName() + "\n" +
+            "Original Size: " + originalSize + " bytes\n" +
+            "Compressed Size: " + compressedSize + " bytes\n" +
+            "Compression Ratio: " + String.format("%.2f", ratio) + " %\n\n" +
+            "Compressed Data (Binary View):\n" + binaryBuilder.toString()
+        );
+
+        statusLabel.setText("Compression successful: " + outFile.getName());
+    } catch (Exception ex) {
+        ex.printStackTrace();
+        statusLabel.setText("Compression failed: " + ex.getMessage());
+    }
+}
+private void decompressFile() 
+{
+        if (selectedFile == null) {
+            statusLabel.setText("Please select a file first.");
+            return;
+        }
         try {
-            byte[] data = FileHandler.readFile(selectedFile);
-
-            if (isCompress) {
-                byte[] compressedData = HuffmanAlgorithm.compress(data);
-                String compressedText = new String(compressedData);
-                resultTextArea.setText("Compressed Data:\n" + compressedText);
-                // Save the compressed file
-                File compressedFile = new File(selectedFile.getParent(), selectedFile.getName() + ".huff");
-                FileHandler.writeFile(compressedFile, compressedData);
-                statusLabel.setText("File compressed successfully: " + compressedFile.getName());
-            } else {
-                byte[] decompressedData = HuffmanAlgorithm.decompress(data);
-                String decompressedText = new String(decompressedData);
-                resultTextArea.setText("Decompressed Data:\n" + decompressedText);
-                // Save the decompressed file
-                File decompressedFile = new File(selectedFile.getParent(), selectedFile.getName() + "_decompressed.txt");
-                FileHandler.writeFile(decompressedFile, decompressedData);
-                statusLabel.setText("File decompressed successfully: " + decompressedFile.getName());
-            }
+            byte[] input = FileHandler.readFile(selectedFile);
+            byte[] decompressed = HuffmanAlgorithm.decompress(input);
+            File outFile = new File(selectedFile.getParent(), selectedFile.getName() + "_decompressed");
+            FileHandler.writeFile(outFile, decompressed);
+            String outputText = new String(decompressed);
+            resultTextArea.setText("Decompressed Content:\n" + outputText);
+            statusLabel.setText("Decompression successful.");
         } catch (Exception ex) {
-            statusLabel.setText("Error: " + ex.getMessage());
+            ex.printStackTrace();
+            statusLabel.setText("Decompression failed: " + ex.getMessage());
         }
-    }
-
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(new Runnable() {
-            public void run() {
-                new CompressorGUI().setVisible(true);
-            }
-        });
     }
 }
